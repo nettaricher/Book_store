@@ -1,0 +1,246 @@
+CREATE DATABSE bookstore;
+
+USE bookstore;
+
+CREATE TABLE IF NOT EXISTS book(
+	book_id int unsigned auto_increment,
+    title varchar(50) not null,
+    author varchar(30) not null,
+    price int unsigned not null,
+    inStock bool,
+    PRIMARY KEY(book_id)
+    );
+
+CREATE TABLE IF NOT EXISTS customer(
+	customer_id int unsigned auto_increment,
+    customer_name varchar(50) not null,
+    customer_phone varchar(15) not null,
+    customer_address varchar(100) not null,
+    PRIMARY KEY(customer_id)
+    );
+
+CREATE TABLE IF NOT EXISTS supplier(
+	supplier_id int unsigned auto_increment,
+    supplier_name varchar(50) not null,
+    supplier_phone varchar(15) not null,
+    supplier_address varchar(100) not null,
+    PRIMARY KEY(supplier_id)
+    );
+
+CREATE TABLE IF NOT EXISTS purchase(
+	purchase_id int unsigned auto_increment,
+    purchase_date DATETIME default NOW(),
+    customer_id int unsigned,
+    PRIMARY KEY(purchase_id),
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id)
+    );
+
+CREATE TABLE IF NOT EXISTS purchase_info(
+	purchase_id int unsigned,
+    purchase_date DATETIME,
+    book_id int unsigned,
+    salesperson int unsigned not null,
+    isCanceled bool,
+    FOREIGN KEY purchase_date REFERENCES purchase(purchase_date),
+	FOREIGN KEY purchase_id REFERENCES purchase(purchase_id),
+    FOREIGN KEY book_id REFERENCES book(book_id),
+    PRIMARY KEY(book_id,purchase_id)
+    );
+
+CREATE TABLE IF NOT EXISTS orders(
+	order_id int unsigned auto_increment,
+    order_date DATETIME default NOW(),
+    _status ENUM('ordered','arrived','noticed'),
+    book_id int unsigned,
+    supplier_id int unsigned,
+    customer_id int unsigned,
+    FOREIGN KEY (book_id) REFERENCES book(book_id),
+	FOREIGN KEY (supplier_id) REFERENCES supplier(supplier_id),
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id),
+    PRIMARY KEY(order_id)
+    );
+
+CREATE TABLE IF NOT EXISTS purchase_info(
+	salesperson int unsigned not null,
+    isCanceled bool,
+    purchase_id int unsigned,
+    book_id int unsigned,
+	FOREIGN KEY (purchase_id) REFERENCES purchase(purchase_id),
+    FOREIGN KEY (book_id) REFERENCES book(book_id),
+    PRIMARY KEY (book_id,purchase_id)
+    );
+
+CREATE TABLE IF NOT EXISTS supplied_by(
+	book_id int unsigned,
+    supplier_id int unsigned,
+    price int unsigned,
+    FOREIGN KEY (book_id) REFERENCES book(book_id),
+    FOREIGN KEY (supplier_id) REFERENCES supplier(supplier_id),
+    PRIMARY KEY (book_id, supplier_id)
+    );
+
+CREATE TABLE IF NOT EXISTS disc_global(
+	disc_id int unsigned auto_increment,
+    info varchar(50),
+    start_date DATE not null,
+    end_date DATE not null,
+    amount decimal(3,2),
+    PRIMARY KEY (disc_id)
+    );
+
+1)
+SELECT * FROM bookstore.book 
+	WHERE inStock = 1;
+---------------------------
+σ inStck = "1"(book)
+
+2)
+SELECT title, _status FROM orders 
+	INNER JOIN book ON orders.book_id = book.book_id 
+	WHERE _status != 'sold';
+---------------------------
+orders ⋈ book
+π title(book)
+π _status(orders)
+σ _status != 'sold'
+
+3)
+SELECT * FROM customer;
+-----------------------
+customer
+
+4)
+SELECT * FROM supplier;
+-----------------------
+supplier
+
+5)
+SELECT * FROM purchase
+	WHERE purchase_date BETWEEN '2018-07-26' AND '2018-07-29' ;
+------------------------
+σ purchase_date>'2018-07-26' AND purchase_date<'2018-07-26' (purchase)
+
+
+6)
+SELECT * FROM bookstore.disc_global 
+WHERE NOW() BETWEEN start_date AND end_date;
+-----------------------
+σ purchase_date>'2018-07-26' AND purchase_date<'2018-07-26' (purchase)
+
+7)
+SELECT * FROM book
+	WHERE title = "Life of Pi";
+------------------------
+σ title = "Life of Pi" (book)
+
+8)
+SELECT supplier_name
+FROM supplied_by
+    INNER JOIN book ON book.book_id = supplied_by.book_id
+    INNER JOIN supplier ON supplied_by.supplier_id = supplier.supplier_id
+    WHERE title = "Lord of the Flies";
+-------------------------
+
+π supplier_name(supplied_by) (σ title = "Lord of the Flies" (supplied_by ⋈ book ⋈ supplier))
+
+
+9)
+SELECT COUNT(1) FROM purchase 
+	RIGHT JOIN purchase_info ON purchase.purchase_id = purchase_info.purchase_id 
+    	WHERE purchase.purchase_date > '2018-07-26' AND book_id = 10 AND isCanceled = 0;
+--------------------------
+
+π COUNT(1) (σ purchase.purchase_date > '2018-07-26' ∧ book_id = 10(purchase ⋈ purchase_info))
+
+
+10)
+SELECT COUNT(1) FROM purchase
+	RIGHT JOIN purchase_info ON purchase.purchase_id = purchase_info.purchase_id
+    WHERE purchase.purchase_date > '2018-07-26' AND customer_id = 10;
+-------------------------
+π COUNT(1) (σ purchase.purchase_date > '2018-07-26' ∧ customer_id = 10(purchase ⋈ purchase_info))
+
+11)
+SELECT customer_id, COUNT(customer_id) as most
+	FROM purchase
+	RIGHT JOIN purchase_info ON purchase.purchase_id = purchase_info.purchase_id
+    	WHERE purchase.purchase_date > '2018-07-26' 
+    	GROUP BY customer_id
+    	ORDER BY most DESC
+    	LIMIT 1;
+-------------------------
+π customer_id (σ purchase.purchase_date > '2018-07-26' (purchase ⋈ purchase_info))
+
+12)
+SELECT supplier_id, COUNT(supplier_id) as most
+	FROM orders WHERE order_date > '2018-07-25'
+    GROUP BY supplier_id
+    ORDER BY most DESC
+    LIMIT 1;
+-------------------------
+π supplier_id (σ order_date > '2018-07-25' (orders))
+
+13)
+SELECT COUNT(order_id) FROM bookstore.orders
+	WHERE order_date BETWEEN '2018-07-28' AND '2018-07-29';
+-------------------------
+π COUNT(order_id) (σ order_date > '2018-07-28' ∧ order_date < '2018-07-29' (orders))
+
+
+14)
+SELECT COUNT(order_id) FROM bookstore.orders
+	WHERE order_date > '2018-07-28' AND order_date < '2018-07-29' AND _status = 'sold';
+---------------------------
+π COUNT(order_id) (σ order_date > '2018-07-28' ∧ order_date < '2018-07-29' ∧ _status = 'sold' (orders))
+
+15)
+SELECT book.title, book.price, purchase_info.disc FROM purchase_info 
+	INNER JOIN purchase ON purchase_info.purchase_id = purchase.purchase_id 
+    	INNER JOIN book ON purchase_info.book_id = book.book_id 
+    	WHERE customer_id = 10 AND isCanceled = 0 AND purchase.purchase_date > '2018-05-22';
+---------------------------
+π title,price,disc (σ customer_id = 10 ∧ isCanceled = 0 ∧ purchase_date > '2018-05-22' (purchase_info ⋈ purchase ⋈ book)
+
+16) 
+SELECT SUM(book.price)
+	FROM ((purchase_info
+	INNER JOIN purchase ON purchase_info.purchase_id = purchase.purchase_id)
+    	INNER JOIN book ON purchase_info.book_id = book.book_id)
+    	WHERE purchase_date > '2018-01-01' AND purchase_date < '2018-10-31' AND purchase_info.isCanceled = 0;
+--------------------------
+π SUM(price) (σ purchase_date > '2018-01-01' ∧ purchase_date < '2018-10-31' ∧ purchase_info.isCanceled = 0(purchase_info ⋈ purchase ⋈ book))
+
+17)
+SELECT COUNT(customer_id) FROM customer
+	WHERE join_date > '2018-06-01';
+---------------------------
+π COUNT(customer_id) (σ join_date > '2018-06-01'(customer))
+
+18)
+SELECT SUM(supplied_by.price) FROM orders 
+	INNER JOIN supplied_by ON orders.supplier_id = supplied_by.supplier_id AND orders.book_id = supplied_by.book_id 
+    	WHERE orders.supplier_id = 10 AND orders.order_date BETWEEN '2018-01-01' AND '2018-12-12';
+---------------------------
+π SUM(supplied_by.price) (σ supplier_id = 10 ∧ order_date > '2018-01-01' ∧ order_date < '2018-12-12'(orders ⋈ supplied_by)
+
+
+19)
+SELECT SUM(book.price) 
+FROM ((purchase_info 
+	INNER JOIN purchase ON purchase_info.purchase_id = purchase.purchase_id) 
+    	INNER JOIN book ON purchase_info.book_id = book.book_id) 
+   	WHERE purchase_info.employee_id = 1 AND purchase.purchase_date BETWEEN '2018-07-10' AND '2018-08-10';
+-----------------------
+π SUM(book.price) (σ employee_id = 1 ∧ purchase_date > '2018-07-10' ∧ purchase_date < '2018-08-10'(purchase_info ⋈ purchase ⋈ book))
+
+20)
+SELECT purchase_info.book_id, title, COUNT(purchase_info.book_id) as most 
+FROM purchase 
+	RIGHT JOIN purchase_info ON purchase.purchase_id = purchase_info.purchase_id 
+	RIGHT JOIN book ON purchase_info.book_id = book.book_id 
+	WHERE purchase.purchase_date BETWEEN '2018-07-26' AND '2018-07-31'
+	GROUP BY purchase_info.book_id 
+	ORDER BY most DESC 
+	LIMIT 10;
+------------------------------------
+π book_id, title, COUNT(book_id) (σ purchase_date > '2018-07-26' ∧ purchase_date < '2018-07-31'(purchase ⋈ purchase_info ⋈ book))
